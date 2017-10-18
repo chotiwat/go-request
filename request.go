@@ -720,7 +720,7 @@ func (hr *Request) deserialize(handler Deserializer) (*ResponseMeta, error) {
 
 	meta.ContentLength = int64(len(body))
 	hr.logResponse(meta, body, hr.state)
-	if res.StatusCode != http.StatusNoContent && handler != nil {
+	if meta.ContentLength > 0 && handler != nil {
 		err = handler(body)
 	}
 	return meta, exception.Wrap(err)
@@ -742,12 +742,14 @@ func (hr *Request) deserializeWithError(okHandler Deserializer, errorHandler Des
 
 	meta.ContentLength = int64(len(body))
 	hr.logResponse(meta, body, hr.state)
-	if res.StatusCode == http.StatusOK {
-		if okHandler != nil {
-			err = okHandler(body)
+	if meta.ContentLength > 0 {
+		if res.StatusCode == http.StatusOK {
+			if okHandler != nil {
+				err = okHandler(body)
+			}
+		} else if errorHandler != nil {
+			err = errorHandler(body)
 		}
-	} else if res.StatusCode != http.StatusNoContent && errorHandler != nil {
-		err = errorHandler(body)
 	}
 	return meta, exception.Wrap(err)
 }
