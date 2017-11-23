@@ -74,7 +74,7 @@ type Request struct {
 	KeepAliveTimeout time.Duration
 	Label            string
 
-	logger         *logger.Agent
+	log            *logger.Logger
 	state          interface{}
 	postedFiles    []PostedFile
 	responseBuffer Buffer
@@ -91,26 +91,26 @@ type Request struct {
 	mockProvider                    MockedResponseProvider
 }
 
-// OnResponse configures an event receiver.
-func (hr *Request) OnResponse(hook ResponseHandler) *Request {
+// WithOnResponse configures an event receiver.
+func (hr *Request) WithOnResponse(hook ResponseHandler) *Request {
 	hr.incomingResponseHandler = hook
 	return hr
 }
 
-// OnResponseStateful configures an event receiver that includes the request state.
-func (hr *Request) OnResponseStateful(hook StatefulResponseHandler) *Request {
+// WithOnResponseStateful configures an event receiver that includes the request state.
+func (hr *Request) WithOnResponseStateful(hook StatefulResponseHandler) *Request {
 	hr.statefulIncomingResponseHandler = hook
 	return hr
 }
 
-// OnCreateTransport configures an event receiver.
-func (hr *Request) OnCreateTransport(hook CreateTransportHandler) *Request {
+// WithOnCreateTransport configures an event receiver.
+func (hr *Request) WithOnCreateTransport(hook CreateTransportHandler) *Request {
 	hr.createTransportHandler = hook
 	return hr
 }
 
-// OnRequest configures an event receiver.
-func (hr *Request) OnRequest(hook OutgoingRequestHandler) *Request {
+// WithOnRequest configures an event receiver.
+func (hr *Request) WithOnRequest(hook OutgoingRequestHandler) *Request {
 	hr.outgoingRequestHandler = hook
 	return hr
 }
@@ -146,14 +146,14 @@ func (hr *Request) WithMockProvider(provider MockedResponseProvider) *Request {
 }
 
 // WithLogger enables logging with HTTPRequestLogLevelErrors.
-func (hr *Request) WithLogger(agent *logger.Agent) *Request {
-	hr.logger = agent
+func (hr *Request) WithLogger(agent *logger.Logger) *Request {
+	hr.log = agent
 	return hr
 }
 
 // Logger returns the request diagnostics agent.
-func (hr *Request) Logger() *logger.Agent {
-	return hr.logger
+func (hr *Request) Logger() *logger.Logger {
+	return hr.log
 }
 
 // WithTransport sets a transport for the request.
@@ -209,6 +209,11 @@ func (hr *Request) WithPathf(format string, args ...interface{}) *Request {
 func (hr *Request) WithCombinedPath(components ...string) *Request {
 	hr.Path = util.String.CombinePathComponents(components...)
 	return hr
+}
+
+// WithURLf sets the url based on a format and args.
+func (hr *Request) WithURLf(format string, args ...interface{}) *Request {
+	return hr.WithURL(fmt.Sprintf(format, args...))
 }
 
 // WithURL sets the request target url whole hog.
@@ -762,8 +767,11 @@ func (hr *Request) logRequest() {
 		hr.outgoingRequestHandler(meta)
 	}
 
-	if hr.logger != nil {
-		hr.logger.OnEvent(Event, meta)
+	if hr.log != nil {
+		hr.log.Trigger(EventOutgoing{
+			ts:  time.Now().UTC(),
+			req: meta,
+		})
 	}
 }
 
@@ -775,8 +783,13 @@ func (hr *Request) logResponse(resMeta *ResponseMeta, responseBody []byte, state
 		hr.incomingResponseHandler(hr.Meta(), resMeta, responseBody)
 	}
 
-	if hr.logger != nil {
-		hr.logger.OnEvent(EventResponse, hr.Meta(), resMeta, responseBody, state)
+	if hr.log != nil {
+		hr.log.Trigger(EventResponse{
+			ts:   time.Now().UTC(),
+			req:  hr.Meta(),
+			res:  resMeta,
+			body: responseBody,
+		})
 	}
 }
 
